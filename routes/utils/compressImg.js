@@ -7,9 +7,9 @@ async function compressImg(p) {
     try {
       for (let i in p) {
         await images(`${PATH.ORIGINAL_IMAGE_STORAGE_PATH}/${p[i]}`)
-          .size(1024)
+          .size(512)
           .save(`${PATH.COMPRESSED_IMAGE_STORAGE_PATH}/${p[i]}`, {
-            quality: 80
+            quality: 30
           })
       }
     } catch (error) {
@@ -19,9 +19,9 @@ async function compressImg(p) {
   } else {
     try {
       await images(`${PATH.ORIGINAL_IMAGE_STORAGE_PATH}/${p}`)
-        .size(1024)
+        .size(512)
         .save(`${PATH.COMPRESSED_IMAGE_STORAGE_PATH}/${p}`, {
-          quality: 80
+          quality: 30
         })
     } catch (error) {
       console.error(error.message)

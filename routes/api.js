@@ -16,6 +16,8 @@ const search = require('./utils/search')
 const getAddr = require('./utils/getCord')
 const getRandomArrayElements = require('./utils/getRandomArrayElements')
 const compressImg = require('./utils/compressImg')
+const findUnusedID = require('./utils/findUnusedID') // search for unused id(missing number) from array
+
 
 router.prefix('/api')
 
@@ -41,15 +43,25 @@ router.post('/createAlbum', async (ctx) => {
   const result = await new Promise((resolve, reject) => {
     album.find({}).exec(async (err, data) => {
       if (err) reject(err)
+
       const arr = []
+      const idArr = []
+      let unusedID = undefined
+
       for (let i in data[0].albums) {
         arr.push(data[0].albums[i].name)
+        idArr.push(data[0].albums[i].id)
       }
-      index = arr.indexOf(query.name)
-      if (index === -1) {
+
+      // in order to prevent error, index of collection albums's id must start with 0
+      // search for unused id in collection albums(here is an id array)
+      idArr.indexOf(0) === -1 ? unusedID = 0 : unusedID = findUnusedID(idArr)
+
+      if (arr.indexOf(query.name) === -1) {
         // create a new subdocument in collection album
         const newItem = {
-          id: data[0].albums.length++,
+          // search for unused id in collection albums, insert if there is one when unusedID has value
+          id: unusedID === undefined ? data[0].albums.length++ : unusedID,
           name: query.name,
           avatar: '',
           describe: query.describe,
@@ -94,19 +106,20 @@ router.post('/uploadImg', upload.array('file', 12), async (ctx) => {
     // compress the img and save it to public/compressedImg
     await compressImg(ctx.req.files[0].filename)
 
-    const name = await album.findOne({}, {
-      albums: {
-        $elemMatch: {
-          id: query.id
-        }
-      }
-    })
+    // const name = await album.findOne({}, {
+    //   albums: {
+    //     $elemMatch: {
+    //       id: query.id
+    //     }
+    //   }
+    // })
 
     // add img's url and it's related album name to collection originals
     await originals.updateOne({
       $addToSet: {
         originals: {
-          belongTo: name.albums[0].name,
+          // belongTo: name.albums[0].name,
+          belongTo: query.name,
           url: url
         }
       }
@@ -116,7 +129,8 @@ router.post('/uploadImg', upload.array('file', 12), async (ctx) => {
     await compresseds.updateOne({
       $addToSet: {
         compresseds: {
-          belongTo: name.albums[0].name,
+          // belongTo: name.albums[0].name,
+          belongTo: query.name,
           url: compressedImgUrl
         }
       }
@@ -124,7 +138,8 @@ router.post('/uploadImg', upload.array('file', 12), async (ctx) => {
 
     // set last upload img as album's avatar
     await album.updateOne({
-      'albums.id': query.id
+      // 'albums.id': query.id 
+      'albums.name': query.name
     }, {
       'albums.$.avatar': compressedImgUrl
     })
@@ -294,7 +309,7 @@ router.get('/getCompressedImg', async (ctx) => {
     const name = await album.findOne({}, {
       albums: {
         $elemMatch: {
-          id: query.id
+          name: query.name
         }
       }
     })

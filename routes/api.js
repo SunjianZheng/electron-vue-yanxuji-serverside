@@ -1,4 +1,6 @@
-const { PATH } = require('../config/config') // configurations
+const {
+  PATH
+} = require('../config/config') // configurations
 
 const router = require('koa-router')()
 const queryString = require('querystring')
@@ -53,14 +55,11 @@ router.post('/createAlbum', async (ctx) => {
         idArr.push(data[0].albums[i].id)
       }
 
-      // in order to prevent error, index of collection albums's id must start with 0
-      // search for unused id in collection albums(here is an id array)
-      idArr.indexOf(0) === -1 ? unusedID = 0 : unusedID = findUnusedID(idArr)
+      idArr.indexOf(0) === -1 ? unusedID = 0 : unusedID = undefined
 
       if (arr.indexOf(query.name) === -1) {
         // create a new subdocument in collection album
         const newItem = {
-          // search for unused id in collection albums, insert if there is one when unusedID has value
           id: unusedID === undefined ? data[0].albums.length++ : unusedID,
           name: query.name,
           avatar: '',
@@ -124,7 +123,7 @@ router.post('/uploadImg', upload.array('file', 12), async (ctx) => {
         }
       }
     })
-    
+
     // add compressed img's url and it's related album name to collection compressed
     await compresseds.updateOne({
       $addToSet: {
@@ -209,7 +208,7 @@ router.get('/getExif', async (ctx) => {
       ctx.body = 'No Exif segment found in the given image.'
     } else {
       const gpsInfo = result.gps
-      
+
       // if have exif infos but do not have gps info
       const kArr = Object.keys(gpsInfo)
       const coorAndAddr = kArr.length !== 0 ? await getAddr(gpsInfo) : {
@@ -409,10 +408,10 @@ router.post('/deleteAlbum', async (ctx) => {
         }
       }
     })
-    
-  
-  /*-----------------------------------------------------------*/
-  
+
+
+    /*-----------------------------------------------------------*/
+
     try {
       let compressedUrlArr = []
 
@@ -457,42 +456,42 @@ router.post('/deleteAlbum', async (ctx) => {
     /*-----------------------------------------------------------*/
 
     try {
-       let originalUrlArr = []
+      let originalUrlArr = []
 
-       // find img under album
-       const original = await originals.aggregate([{
-         $unwind: "$originals"
-       }, {
-         $match: {
-           "originals.belongTo": query.name
-         }
-       }])
+      // find img under album
+      const original = await originals.aggregate([{
+        $unwind: "$originals"
+      }, {
+        $match: {
+          "originals.belongTo": query.name
+        }
+      }])
 
-       // get img's path
-       for (let i in original) {
-         let url = original[i].originals.url
-         let u = url.split('/');
-         let path = `${PATH.ORIGINAL_IMAGE_STORAGE_PATH}/${u[4]}`
-         originalUrlArr.push(path)
-       }
+      // get img's path
+      for (let i in original) {
+        let url = original[i].originals.url
+        let u = url.split('/');
+        let path = `${PATH.ORIGINAL_IMAGE_STORAGE_PATH}/${u[4]}`
+        originalUrlArr.push(path)
+      }
 
-       try {
-         // delete img's url documents from collection originals
-         await originals.updateOne({}, {
-           "$pull": {
-             "originals": {
-               "belongTo": query.name
-             }
-           }
-         }, {
-           multi: true
-         })
-       } catch (error) {
-         console.error('ERROR: delete original from collection error', error.message)
-       }
+      try {
+        // delete img's url documents from collection originals
+        await originals.updateOne({}, {
+          "$pull": {
+            "originals": {
+              "belongTo": query.name
+            }
+          }
+        }, {
+          multi: true
+        })
+      } catch (error) {
+        console.error('ERROR: delete original from collection error', error.message)
+      }
 
-       // delete img from the public folder
-       deleteImg(originalUrlArr)
+      // delete img from the public folder
+      deleteImg(originalUrlArr)
     } catch (error) {
       console.error('ERROR: delete original error', error.message)
     }
@@ -559,17 +558,80 @@ router.get('/search', async (ctx) => {
  */
 router.get('/recommand', async (ctx) => {
   try {
-  let result = await compresseds.findOne()
-  let arr = []
-  for (let i in result.compresseds) {
-    arr.push(result.compresseds[i].url)
-  }
-  const selectedElements = getRandomArrayElements(arr, 6)
+    let result = await compresseds.findOne()
+    let arr = []
+    for (let i in result.compresseds) {
+      arr.push(result.compresseds[i].url)
+    }
+    const selectedElements = getRandomArrayElements(arr, 6)
     ctx.status = 200
     ctx.body = selectedElements
   } catch (error) {
     ctx.status = 404
     ctx.body = '无结果!'
+  }
+})
+
+router.post('/updateAlbumID', async (ctx) => {
+  try {
+    // get all ID in collection albums
+    const allID = await album.aggregate([{
+      $unwind: "$albums"
+    }, {
+      $match: {
+        'albums.id': {
+          $gte: 0
+        }
+      }
+    }, {
+      $project: {
+        'albums.id': 1
+      }
+    }])
+
+    const allIDArr = []
+    for (let i in allID) {
+      allIDArr.push(allID[i].albums.id)
+    }
+
+    // find unused ID
+    const unusedID = findUnusedID(allIDArr)
+
+    // search for sub documents whitch greater than unused ID
+    // in order to prevent error, index of collection albums's id must start with 0
+    // search for unused id in collection albums(here is an id array)
+    const id = await album.aggregate([{
+      $unwind: "$albums"
+    }, {
+      $match: {
+        "albums.id": {
+          $gt: unusedID
+        }
+      }
+    }, {
+      $project: {
+        "albums.id": 1,
+      }
+    }])
+
+    // update ID in colllection albums in order to make them continuous
+    for (let i in id) {
+      await album.updateOne({
+        'albums.id': {
+          $eq: id[i].albums.id
+        }
+      }, {
+        $set: {
+          'albums.$.id': --id[i].albums.id
+        }
+      })
+    }
+
+    ctx.status = 200
+    ctx.body = 1
+  } catch (error) {
+    ctx.status = 404
+    ctx.body = error.message
   }
 })
 

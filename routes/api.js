@@ -572,6 +572,12 @@ router.get('/recommand', async (ctx) => {
   }
 })
 
+/**
+ * @route   api/updateAlbumID
+ * @desc    search for sub documents which greater than unused ID
+            in order to prevent error, index of collection albums's id must start with 0
+ * @params  none
+ */
 router.post('/updateAlbumID', async (ctx) => {
   try {
     // get all ID in collection albums
@@ -597,8 +603,6 @@ router.post('/updateAlbumID', async (ctx) => {
     // find unused ID
     const unusedID = findUnusedID(allIDArr)
 
-    // search for sub documents whitch greater than unused ID
-    // in order to prevent error, index of collection albums's id must start with 0
     // search for unused id in collection albums(here is an id array)
     const id = await album.aggregate([{
       $unwind: "$albums"
@@ -635,4 +639,89 @@ router.post('/updateAlbumID', async (ctx) => {
   }
 })
 
+/**
+ * @route   api/renameAlbum
+ * @desc    renameAlbum
+ * @params  nameOnceUsed, newName
+ */
+
+router.post('/renameAlbum', async (ctx) => {
+  const {
+    nameOnceUsed,
+    newName
+  } = queryString.parse(ctx.querystring)
+  
+  try {
+    // rename album from collection albums
+    try {
+      const res = await album.updateOne({
+        'albums.name': {
+          $eq: nameOnceUsed
+        }
+      }, {
+        $set: {
+          'albums.$.name': newName
+        }
+      })
+      // console.log(res)
+    } catch (error) {
+      console.error('update collection album failed: \n', error.message)
+    }
+
+    // get times
+    const times = await compresseds.aggregate([{
+      $unwind: "$compresseds"
+    }, {
+      $match: {
+        "compresseds.belongTo": {
+          $eq: nameOnceUsed
+        }
+      }
+    }, {
+      $project: {
+        "albums.id": 1,
+      }
+      }])
+    
+    // modify the relationship between compressed images and album
+    try {
+      for (let i in times) {
+        await compresseds.updateOne({
+          'compresseds.belongTo': nameOnceUsed
+        }, {
+          $set: {
+            'compresseds.$.belongTo': newName
+          }
+        })
+      }
+      console.log(res)
+    } catch (error) {
+      console.error('update collection compresseds failed: \n', error.message)
+    }
+
+    // modify the relationship between originals images and album
+    try {
+      for (let i in times) {
+        await originals.updateOne({
+          'originals.belongTo': {
+            $eq: nameOnceUsed
+          }
+        }, {
+          $set: {
+            'originals.$.belongTo': newName
+          }
+        })
+      }
+    } catch (error) {
+      console.error('update collection originals failed: \n', error.message)
+    }
+
+    ctx.status = 200
+    ctx.body = 1
+  } catch (error) {
+    ctx.status = 404
+    ctx.body = error.message
+  }
+
+})
 module.exports = router

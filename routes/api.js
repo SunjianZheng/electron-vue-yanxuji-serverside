@@ -724,4 +724,58 @@ router.post('/renameAlbum', async (ctx) => {
   }
 
 })
+
+/**
+ * @route   api/moveImages
+ * @desc    move image(s) to selected album
+ * @params  urlString, albumName
+ */
+
+router.post('/moveImages', async (ctx) => {
+  // TODO: FINISH THIS FUNCTION
+  const {
+    urlString,
+    albumName
+  } = queryString.parse(ctx.querystring)
+
+  const urlArr = urlString.split(',')
+
+  try {
+    // modify the relationship between compressed images and album
+    try {
+      for (let i in urlArr) {
+        await compresseds.updateOne({
+          'compresseds.url': urlArr[i]
+        }, {
+          $set: {
+            'compresseds.$.belongTo': albumName
+          }
+        })
+      }
+    } catch (error) {
+      console.error('update collection compresseds failed: \n', error.message)
+    }
+
+    // modify the relationship between originals images and album
+    try {
+      for (let i in urlArr) {
+        await originals.updateOne({
+          'originals.url': `${PATH.ORIGINAL_IMAGE_URL_PREFIX}/${urlArr[i].split('/')[4]}`
+        }, {
+          $set: {
+            'originals.$.belongTo': albumName
+          }
+        })
+      }
+    } catch (error) {
+      console.error('update collection originals failed: \n', error.message)
+    }
+
+    ctx.status = 200
+    ctx.body = 1
+  } catch (error) {
+    ctx.status = 404
+    ctx.body = error.message
+  }
+})
 module.exports = router

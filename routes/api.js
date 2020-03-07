@@ -19,6 +19,7 @@ const getAddr = require('./utils/getCord')
 const getRandomArrayElements = require('./utils/getRandomArrayElements')
 const compressImg = require('./utils/compressImg')
 const findUnusedID = require('./utils/findUnusedID') // search for unused id(missing number) from array
+const filtrateObject = require('./utils/filter.js')
 
 
 router.prefix('/api')
@@ -789,6 +790,157 @@ router.post('/moveImages', async (ctx) => {
 
     ctx.status = 200
     ctx.body = 1
+  } catch (error) {
+    ctx.status = 404
+    ctx.body = error.message
+  }
+})
+
+/**
+ * @route   api/moveImages
+ * @desc    move image(s) to selected album
+ * @params  urlString, albumName
+ */
+
+router.get('/getRecommendAlbums', async (ctx) => {
+  const result = {
+    recommandByPhotographedDay: [],
+    recommandByPhotographedPlace: []
+  }
+  let city = []
+  let time = []
+
+  try {
+  // get year
+    try {
+      let timeArr = []
+      let tempArr = []
+      
+      // get DateTimeOriginal document
+      let res = await exifs.findOne({}, {
+        '_id': 0,
+        'exifs.exifInfo.exif.DateTimeOriginal': 1
+      })
+
+      // get sbudocument under exifInfo
+      res.exifs.map(element => tempArr.push(element.exifInfo))
+
+      // get sbudocument under exif
+      tempArr = tempArr
+        .filter(i => i)
+        .map(element => element = timeArr.push(element.exif))
+      
+      // get an sorted array of year
+      timeArr = timeArr
+        .map(i => {
+          if (i.hasOwnProperty('DateTimeOriginal')) {
+            return i.DateTimeOriginal
+              .split(' ')[0]
+              .split(':')[0]
+          }
+        })
+        .filter(i => i)
+        .filter((item, index, self) => self.indexOf(item) === index)
+        .sort((a, b) => a - b)
+
+      time = timeArr
+    } catch (error) {
+      console.log('get photographed year failed: ', error.message)
+    }
+
+        const yearTemp = []
+        for (let i in time) {
+          res = await exifs.aggregate([{
+            $unwind: "$exifs"
+          }, {
+            $match: {
+              'exifs.exifInfo.exif.DateTimeOriginal': {
+                $regex: eval(`/${time[i]}/g`)
+              }
+            }
+          }, {
+            $project: {
+              '_id': 0,
+              'exifs.belongTo': 1
+            }
+          }])
+          yearTemp.push(res)
+        }
+
+        // get recommand by photographed place
+        for (let i in yearTemp) {
+          let doc = {
+            year: time[i],
+            url: []
+          }
+          for (let j in yearTemp[i]) {
+            doc.url.push(`${PATH.COMPRESSED_IMAGE_URL_PREFIX}/${yearTemp[i][j].exifs.belongTo}`)
+          }
+          result.recommandByPhotographedDay.push(doc)
+        }
+
+    // -------------------------------------------------------------------- //
+
+    // get photographed place
+    try {
+      let placeArr = []
+      const res = await exifs.findOne({}, {
+        'exifs.formattedAddress' : 1
+      })
+
+      res.exifs.map(element => placeArr.push(element.formattedAddress))
+
+      placeArr = placeArr
+        .filter(i => i)
+        .map(element => city.push(
+          element
+          .split('市')[0]
+          .split('省')[1] +
+          '市'
+        ))
+
+      city = city.filter((item, index, self) => {
+        return self.indexOf(item) == index
+      })
+    } catch (error) {
+      console.log('get photographed place failed: ', error.message)
+    }
+
+    const cityTemp = []
+    for (let i in city) {
+      res = await exifs.aggregate([{
+        $unwind: "$exifs"
+      }, {
+        $match: {
+          'exifs.formattedAddress': {
+            $regex: eval(`/${city[i]}/g`)
+          }
+        }
+      }, {
+          $project: {
+          '_id': 0,
+          'exifs.belongTo': 1
+        }
+        }])
+      cityTemp.push(res)
+    }
+
+    // get recommand by photographed place
+    for (let i in cityTemp) {
+      let doc = {
+        place: city[i],
+        url: []
+      }
+      for (let j in cityTemp[i]) {
+        doc.url.push(`${PATH.COMPRESSED_IMAGE_URL_PREFIX}/${cityTemp[i][j].exifs.belongTo}`)
+      }
+        result.recommandByPhotographedPlace.push(doc)
+    }
+
+    // -------------------------------------------------------------------- //
+
+    ctx.status = 200
+    ctx.body = result
   } catch (error) {
     ctx.status = 404
     ctx.body = error.message

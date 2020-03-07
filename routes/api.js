@@ -325,7 +325,7 @@ router.get('/getCompressedImg', async (ctx) => {
     for (let i in result) {
       arr.push(result[i].compresseds.url)
     }
-    console.log(arr)
+    // console.log(arr)
 
     if (arr) {
       ctx.status = 200
@@ -507,23 +507,26 @@ router.post('/deleteAlbum', async (ctx) => {
 /**
  * @route   api/changeAvatar
  * @desc    change album's avatar when delete img from DB
- * @params  id, url
+ * @params  name, url
  */
 router.post('/changeAvatar', async (ctx) => {
-  const query = queryString.parse(ctx.querystring)
+  const {
+    name,
+    url
+  } = queryString.parse(ctx.querystring)
 
   try {
     await album.updateOne({
-      'albums.id': query.id
+      'albums.name': name
     }, {
-      'albums.$.avatar': +query.url === 0 ? '' : `${PATH.COMPRESSED_IMAGE_URL_PREFIX}/${query.url}`
+      'albums.$.avatar': +url === 0 ? '' : `${PATH.COMPRESSED_IMAGE_URL_PREFIX}/${url}`
     })
 
     ctx.status = 200
     ctx.body = 1
   } catch (error) {
     ctx.status = 404
-    ctx.body = erroe.message
+    ctx.body = error.message
   }
 })
 
@@ -650,7 +653,7 @@ router.post('/renameAlbum', async (ctx) => {
     nameOnceUsed,
     newName
   } = queryString.parse(ctx.querystring)
-  
+
   try {
     // rename album from collection albums
     try {
@@ -681,8 +684,8 @@ router.post('/renameAlbum', async (ctx) => {
       $project: {
         "albums.id": 1,
       }
-      }])
-    
+    }])
+
     // modify the relationship between compressed images and album
     try {
       for (let i in times) {
@@ -732,7 +735,6 @@ router.post('/renameAlbum', async (ctx) => {
  */
 
 router.post('/moveImages', async (ctx) => {
-  // TODO: FINISH THIS FUNCTION
   const {
     urlString,
     albumName
@@ -754,6 +756,20 @@ router.post('/moveImages', async (ctx) => {
       }
     } catch (error) {
       console.error('update collection compresseds failed: \n', error.message)
+    }
+
+    // modify the cover of the album which added images
+    try {
+      const res = await album.updateOne({
+        'albums.name': albumName
+      }, {
+        $set: {
+          'albums.$.avatar': urlArr[urlArr.length - 1]
+        }
+      })
+      console.log('res: ', res)
+    } catch (error) {
+      console.error('modify the cover of the album which added images failed: \n', error.message)
     }
 
     // modify the relationship between originals images and album

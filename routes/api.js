@@ -797,9 +797,9 @@ router.post('/moveImages', async (ctx) => {
 })
 
 /**
- * @route   api/moveImages
- * @desc    move image(s) to selected album
- * @params  urlString, albumName
+ * @route   api/getRecommendAlbums
+ * @desc    get recommand albums for each years and each cities
+ * @params  none
  */
 
 router.get('/getRecommendAlbums', async (ctx) => {
@@ -811,11 +811,11 @@ router.get('/getRecommendAlbums', async (ctx) => {
   let time = []
 
   try {
-  // get year
+    // get year
     try {
       let timeArr = []
       let tempArr = []
-      
+
       // get DateTimeOriginal document
       let res = await exifs.findOne({}, {
         '_id': 0,
@@ -829,7 +829,7 @@ router.get('/getRecommendAlbums', async (ctx) => {
       tempArr = tempArr
         .filter(i => i)
         .map(element => element = timeArr.push(element.exif))
-      
+
       // get an sorted array of year
       timeArr = timeArr
         .map(i => {
@@ -848,36 +848,36 @@ router.get('/getRecommendAlbums', async (ctx) => {
       console.log('get photographed year failed: ', error.message)
     }
 
-        const yearTemp = []
-        for (let i in time) {
-          res = await exifs.aggregate([{
-            $unwind: "$exifs"
-          }, {
-            $match: {
-              'exifs.exifInfo.exif.DateTimeOriginal': {
-                $regex: eval(`/${time[i]}/g`)
-              }
-            }
-          }, {
-            $project: {
-              '_id': 0,
-              'exifs.belongTo': 1
-            }
-          }])
-          yearTemp.push(res)
+    const yearTemp = []
+    for (let i in time) {
+      res = await exifs.aggregate([{
+        $unwind: "$exifs"
+      }, {
+        $match: {
+          'exifs.exifInfo.exif.DateTimeOriginal': {
+            $regex: eval(`/${time[i]}/g`)
+          }
         }
+      }, {
+        $project: {
+          '_id': 0,
+          'exifs.belongTo': 1
+        }
+      }])
+      yearTemp.push(res)
+    }
 
-        // get recommand by photographed place
-        for (let i in yearTemp) {
-          let doc = {
-            year: time[i],
-            url: []
-          }
-          for (let j in yearTemp[i]) {
-            doc.url.push(`${PATH.COMPRESSED_IMAGE_URL_PREFIX}/${yearTemp[i][j].exifs.belongTo}`)
-          }
-          result.recommandByPhotographedDay.push(doc)
-        }
+    // get recommand by photographed place
+    for (let i in yearTemp) {
+      let doc = {
+        year: time[i],
+        url: []
+      }
+      for (let j in yearTemp[i]) {
+        doc.url.push(`${PATH.COMPRESSED_IMAGE_URL_PREFIX}/${yearTemp[i][j].exifs.belongTo}`)
+      }
+      result.recommandByPhotographedDay.push(doc)
+    }
 
     // -------------------------------------------------------------------- //
 
@@ -885,7 +885,7 @@ router.get('/getRecommendAlbums', async (ctx) => {
     try {
       let placeArr = []
       const res = await exifs.findOne({}, {
-        'exifs.formattedAddress' : 1
+        'exifs.formattedAddress': 1
       })
 
       res.exifs.map(element => placeArr.push(element.formattedAddress))
@@ -917,11 +917,11 @@ router.get('/getRecommendAlbums', async (ctx) => {
           }
         }
       }, {
-          $project: {
+        $project: {
           '_id': 0,
           'exifs.belongTo': 1
         }
-        }])
+      }])
       cityTemp.push(res)
     }
 
@@ -934,7 +934,7 @@ router.get('/getRecommendAlbums', async (ctx) => {
       for (let j in cityTemp[i]) {
         doc.url.push(`${PATH.COMPRESSED_IMAGE_URL_PREFIX}/${cityTemp[i][j].exifs.belongTo}`)
       }
-        result.recommandByPhotographedPlace.push(doc)
+      result.recommandByPhotographedPlace.push(doc)
     }
 
     // -------------------------------------------------------------------- //
@@ -945,5 +945,81 @@ router.get('/getRecommendAlbums', async (ctx) => {
     ctx.status = 404
     ctx.body = error.message
   }
+})
+
+/**
+ * @route   api/modifyAlbumInfo
+ * @desc    modify album 's info
+   @desc    then use moveImages interface on the client side to move all images
+ * @params  albumName, info
+ */
+
+router.post('/modifyAlbumInfo', async (ctx) => {
+  const {
+    albumName,
+    info
+  } = queryString.parse(ctx.querystring)
+  let infoObj = await info
+    .split(',')
+    .filter(i => i)
+    .map(element => {
+      const temp = element.split(':')
+      const obj = new Object()
+
+      obj[temp[0]] = temp[1]
+      return obj
+    })
+
+  // structure of infoObj: [{key: value}, {key: value}]
+  const { status, body } = await new Promise(async (resolve, reject) => {
+    // check if name is already exist
+    const haveName = await album.findOne({
+      albums: {
+        $elemMatch: {
+          'name': albumName
+        }
+      }
+    })
+    if (haveName === null) {
+      resolve({
+        status: 200,
+        body: 'name already exist'
+      })
+    } else {
+      infoObj.map(i => {
+        let temp = undefined
+        if (infoObj.length > 1 && infoObj[0].hasOwnProperty('name')) {
+          temp = infoObj.shift()
+          infoObj.push(temp)
+        }
+      })
+      infoObj.map(async (element) => {
+        try {
+          await album.updateOne({
+            'albums.name': albumName
+          }, {
+            $set: {
+              ['albums.$.' + Object.keys(element).toString()]: Object.values(element).toString()
+            }
+          })
+          resolve({
+            status: 200,
+            body: 1
+          })
+        } catch (error) {
+          console.error(error.message)
+          reject({
+            status: 404,
+            body: error.message
+          })
+        }
+      })
+    }
+  })
+
+  ctx.status = status
+  ctx.body = body
+  // ctx.status = 200
+  // ctx.body = 1
 })
 module.exports = router

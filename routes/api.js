@@ -326,11 +326,10 @@ router.get('/getCompressedImg', async (ctx) => {
     for (let i in result) {
       arr.push(result[i].compresseds.url)
     }
-    // console.log(arr)
 
     if (arr) {
       ctx.status = 200
-      ctx.body = arr
+      ctx.body = arr.sort((a, b) => b.split('/')[4].split('.')[0] - a.split('/')[4].split('.')[0])
     } else {
       ctx.status = 404
       ctx.body = 'none'
@@ -959,17 +958,22 @@ router.post('/modifyAlbumInfo', async (ctx) => {
     albumName,
     info
   } = queryString.parse(ctx.querystring)
-  let infoObj = await info
+  console.log('info: ', info)
+  let infoObj = info
     .split(',')
     .filter(i => i)
     .map(element => {
       const temp = element.split(':')
       const obj = new Object()
-
-      obj[temp[0]] = temp[1]
+      if (temp[0] === 'avatar') {
+        obj[temp[0]] = temp[1] + ':' + temp[2]
+      } else {
+        obj[temp[0]] = temp[1]
+      }
       return obj
     })
-
+  
+  console.log('infoObj: ',infoObj)
   // structure of infoObj: [{key: value}, {key: value}]
   const { status, body } = await new Promise(async (resolve, reject) => {
     // check if name is already exist
@@ -1019,7 +1023,5 @@ router.post('/modifyAlbumInfo', async (ctx) => {
 
   ctx.status = status
   ctx.body = body
-  // ctx.status = 200
-  // ctx.body = 1
 })
 module.exports = router

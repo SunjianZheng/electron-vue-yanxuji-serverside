@@ -22,5 +22,5 @@ module.exports = {
     ORIGINAL_IMAGE_STORAGE_PATH: 'public/originalImg',
     COMPRESSED_IMAGE_STORAGE_PATH: 'public/compressedImg'
   },
-  AMAP_JS_API_KEY: 'YOUR KEY'
+  AMAP_JS_API_KEY: 'YOUR_KEY'
 }

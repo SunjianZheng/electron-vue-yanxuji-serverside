@@ -19,8 +19,6 @@ const getAddr = require('./utils/getCord')
 const getRandomArrayElements = require('./utils/getRandomArrayElements')
 const compressImg = require('./utils/compressImg')
 const findUnusedID = require('./utils/findUnusedID') // search for unused id(missing number) from array
-const filtrateObject = require('./utils/filter.js')
-
 
 router.prefix('/api')
 
@@ -75,12 +73,17 @@ router.post('/createAlbum', async (ctx) => {
         })
         resolve({
           status: 200,
-          body: 1
+          body: {
+            code: 200,
+            message: '创建成功!'
+          }
         })
       } else {
         reject({
           status: 404,
-          body: 'name is already exist'
+          body: {
+            code: 404,
+            message: '相册名已存在!'}
         })
       }
     })
@@ -145,15 +148,19 @@ router.post('/uploadImg', upload.array('file', 12), async (ctx) => {
     })
 
     ctx.status = 200
-    ctx.body = 1
+    ctx.body = {
+      code: 200,
+      message: '上传成功!',
+      files: `${PATH.COMPRESSED_IMAGE_URL_PREFIX}/${ctx.req.files[0].filename}`
+    }
   } catch (error) {
-    ctx.status = 404
-    ctx.body = error.message
+    ctx.status = 502
+    ctx.body = {
+      code: 502,
+      message: '上传失败!',
+      err: error.message
+    }
   }
-  // ctx.body = {
-  //   msg: 'upload successed',
-  //   filename: 'http://localhost/originalImg/' + ctx.req.files[0].filename // return file name
-  // }
 })
 
 /**
@@ -167,16 +174,24 @@ router.get('/getAlbum', async (ctx) => {
     if (result.length === 0) {
       ctx.status = 200
       ctx.body = {
-        msg: '无结果!'
+        code: 200,
+        message: '无结果!'
       }
     } else {
       ctx.status = 200
       ctx.body = {
+        code: 200,
         albums: result[0].albums
       }
     }
   } catch (error) {
     console.error(error)
+    ctx.status = 404
+    ctx.body = {
+      code: 404,
+      message: error.message
+      
+    }
   }
 })
 
@@ -205,8 +220,12 @@ router.get('/getExif', async (ctx) => {
     const result = await getExif(path)
 
     if (result === undefined) {
-      ctx.status = 404
-      ctx.body = 'No Exif segment found in the given image.'
+      ctx.status = 200
+      ctx.body = {
+        code: 200,
+        message: 'No Exif segment found in the given image.'
+      }
+      return
     } else {
       const gpsInfo = result.gps
 
@@ -239,18 +258,25 @@ router.get('/getExif', async (ctx) => {
         }
       })
       // add coordinate and address
-      const body = {
+      const exifResults = {
         coor: coorAndAddr.coor,
         addr: coorAndAddr.addr,
         exif: result
       }
 
       ctx.status = 200
-      ctx.body = body
+      ctx.body = {
+        code: 200,
+        exifResults
+      }
     }
   } catch (error) {
     ctx.status = 404
-    ctx.body = error.message
+    ctx.body = {
+      code: 404,
+      message: '不存在exif信息!',
+      err: error.message
+    }
   }
 })
 
@@ -327,16 +353,27 @@ router.get('/getCompressedImg', async (ctx) => {
       arr.push(result[i].compresseds.url)
     }
 
-    if (arr) {
+    if (arr && arr.length != 0) {
       ctx.status = 200
-      ctx.body = arr.sort((a, b) => b.split('/')[4].split('.')[0] - a.split('/')[4].split('.')[0])
+      ctx.body = {
+        code: 200,
+        compressedImgUrlArr: arr.sort((a, b) => b.split('/')[4].split('.')[0] - a.split('/')[4].split('.')[0])
+      }
     } else {
-      ctx.status = 404
-      ctx.body = 'none'
+      ctx.status = 400
+      ctx.body = {
+        code: 400,
+        message: '相册内没有相片!'
+        // compressedImgUrlArr: []
+      }
     }
   } catch (error) {
     ctx.status = 404
-    ctx.body = error.message
+    ctx.body = {
+      code: 404,
+      message: '资源请求失败',
+      err: error.message
+    }
   }
 })
 
@@ -383,10 +420,16 @@ router.post('/deleteImg', async (ctx) => {
     deleteImg(pathOriginal)
 
     ctx.status = 200
-    ctx.body = 1
+    ctx.body = {
+      code: 200,
+      message: '删除成功'
+    }
   } catch (error) {
     ctx.status = 404
-    ctx.body = error.message
+    ctx.body = {
+      code: 404,
+      message: error.message
+    }
   }
 })
 
@@ -497,10 +540,17 @@ router.post('/deleteAlbum', async (ctx) => {
     }
 
     ctx.status = 200
-    ctx.body = 1
+    ctx.body = {
+      code: 200,
+      message: '删除成功!'
+    }
   } catch (error) {
     ctx.status = 404
-    ctx.body = error.message
+    ctx.body = {
+      code: 404,
+      // message: error.message
+      message: '删除失败!'
+    }
   }
 })
 
@@ -523,10 +573,16 @@ router.post('/changeAvatar', async (ctx) => {
     })
 
     ctx.status = 200
-    ctx.body = 1
+    ctx.body = {
+      code: 200,
+      message: '更新封面成功!'
+    }
   } catch (error) {
     ctx.status = 404
-    ctx.body = error.message
+    ctx.body = {
+      code: 404,
+      message: error.message
+    }
   }
 })
 
@@ -542,24 +598,34 @@ router.get('/search', async (ctx) => {
     const result = await search(query)
     if (result !== 'none') {
       ctx.status = 200
-      ctx.body = result
+      ctx.body = {
+        code: 200,
+        result
+      }
     } else {
-      ctx.status = 404
-      ctx.body = '无结果!'
+      ctx.status = 400
+      ctx.body = {
+        code: 400,
+        message: '查询无结果!'
+      }
     }
   } catch (error) {
     ctx.status = 404
-    ctx.body = error
+    ctx.body = {
+      code: 404,
+      message: '错误',
+      err: error.message
+    }
   }
 
 })
 
 /**
- * @route   api/recommand
+ * @route   api/getRecommendPhotos
  * @desc    random return 5 imgs from collection compresseds
  * @params  none
  */
-router.get('/recommand', async (ctx) => {
+router.get('/getRecommendPhotos', async (ctx) => {
   try {
     let result = await compresseds.findOne()
     let arr = []
@@ -568,10 +634,18 @@ router.get('/recommand', async (ctx) => {
     }
     const selectedElements = getRandomArrayElements(arr, 6)
     ctx.status = 200
-    ctx.body = selectedElements
+    ctx.body = {
+      code: 200,
+      photos: selectedElements
+    }
   } catch (error) {
-    ctx.status = 404
-    ctx.body = '无结果!'
+    ctx.status = 400
+    ctx.body = {
+      code: 400,
+      message: '推荐无结果, 请上传图像!',
+      err: error.message
+      
+    }
   }
 })
 
@@ -635,10 +709,16 @@ router.post('/updateAlbumID', async (ctx) => {
     }
 
     ctx.status = 200
-    ctx.body = 1
+    ctx.body = {
+      code: 200,
+      message: ''
+    }
   } catch (error) {
     ctx.status = 404
-    ctx.body = error.message
+    ctx.body = {
+      code: 404,
+      message: error.message
+    }
   }
 })
 
@@ -788,23 +868,29 @@ router.post('/moveImages', async (ctx) => {
     }
 
     ctx.status = 200
-    ctx.body = 1
+    ctx.body = {
+      code: 200,
+      message: '移动相片成功!'
+    }
   } catch (error) {
     ctx.status = 404
-    ctx.body = error.message
+    ctx.body = {
+      code: 404,
+      message: error.message
+    }
   }
 })
 
 /**
  * @route   api/getRecommendAlbums
- * @desc    get recommand albums for each years and each cities
+ * @desc    get recommend albums for each years and each cities
  * @params  none
  */
 
 router.get('/getRecommendAlbums', async (ctx) => {
   const result = {
-    recommandByPhotographedDay: [],
-    recommandByPhotographedPlace: []
+    recommendByPhotographedDay: [],
+    recommendByPhotographedPlace: []
   }
   let city = []
   let time = []
@@ -866,7 +952,7 @@ router.get('/getRecommendAlbums', async (ctx) => {
       yearTemp.push(res)
     }
 
-    // get recommand by photographed place
+    // get recommend by photographed place
     for (let i in yearTemp) {
       let doc = {
         year: time[i],
@@ -875,7 +961,7 @@ router.get('/getRecommendAlbums', async (ctx) => {
       for (let j in yearTemp[i]) {
         doc.url.push(`${PATH.COMPRESSED_IMAGE_URL_PREFIX}/${yearTemp[i][j].exifs.belongTo}`)
       }
-      result.recommandByPhotographedDay.push(doc)
+      result.recommendByPhotographedDay.push(doc)
     }
 
     // -------------------------------------------------------------------- //
@@ -924,7 +1010,7 @@ router.get('/getRecommendAlbums', async (ctx) => {
       cityTemp.push(res)
     }
 
-    // get recommand by photographed place
+    // get recommend by photographed place
     for (let i in cityTemp) {
       let doc = {
         place: city[i],
@@ -933,16 +1019,23 @@ router.get('/getRecommendAlbums', async (ctx) => {
       for (let j in cityTemp[i]) {
         doc.url.push(`${PATH.COMPRESSED_IMAGE_URL_PREFIX}/${cityTemp[i][j].exifs.belongTo}`)
       }
-      result.recommandByPhotographedPlace.push(doc)
+      result.recommendByPhotographedPlace.push(doc)
     }
 
     // -------------------------------------------------------------------- //
 
     ctx.status = 200
-    ctx.body = result
+    ctx.body = {
+      code: 200,
+      albums: result
+    }
   } catch (error) {
-    ctx.status = 404
-    ctx.body = error.message
+    ctx.status = 400
+    ctx.body = {
+      code: 400,
+      message: '推荐无结果, 请上传图片!',
+      err: error.message
+    }
   }
 })
 
@@ -958,7 +1051,7 @@ router.post('/modifyAlbumInfo', async (ctx) => {
     albumName,
     info
   } = queryString.parse(ctx.querystring)
-  console.log('info: ', info)
+  // console.log('info: ', info)
   let infoObj = info
     .split(',')
     .filter(i => i)
@@ -966,7 +1059,8 @@ router.post('/modifyAlbumInfo', async (ctx) => {
       const temp = element.split(':')
       const obj = new Object()
       if (temp[0] === 'avatar') {
-        obj[temp[0]] = temp[1] + ':' + temp[2]
+        const key = temp.shift()
+        obj[key] = temp.join(':')
       } else {
         obj[temp[0]] = temp[1]
       }
@@ -986,8 +1080,11 @@ router.post('/modifyAlbumInfo', async (ctx) => {
     })
     if (haveName === null) {
       resolve({
-        status: 200,
-        body: 'name already exist'
+        status: 403,
+        body: {
+          code: 403,
+          message: '相册名已存在'
+        }
       })
     } else {
       infoObj.map(i => {
@@ -1008,13 +1105,20 @@ router.post('/modifyAlbumInfo', async (ctx) => {
           })
           resolve({
             status: 200,
-            body: 1
+            body: {
+              code: 200,
+              message: '更新成功'
+            }
           })
         } catch (error) {
           console.error(error.message)
           reject({
             status: 404,
-            body: error.message
+            body: {
+              code: 404,
+              message: '更新失败',
+              err: error.message
+            }
           })
         }
       })
